@@ -1,4 +1,4 @@
-getgenv().ToolNote = "kaigod"
+getgenv().ToolNote = "gay"
 
 -- Ẩn toàn bộ output
 local print = function() end
@@ -83,149 +83,102 @@ local function getSecondsToNightStart()
     return math.floor((delta / FULL_CYCLE_CLOCK) * FULL_DAY_REAL)
 end
 
--- Hàm gửi API thuần túy, không có Webhook
-local function sendPayload(payload)
-    if not req then
-        warn("❌ Exploit của bạn không hỗ trợ HTTP Request!")
-        return
-    end
-
-    local success, err = pcall(function()
-        local response = req({
-            Url = url,
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json"
-            },
-            Body = game:GetService("HttpService"):JSONEncode({payload}) 
-        })
-        
-        -- output ẩn
-    end)
-    
-    -- output ẩn
-end
-
--- Gửi heartbeat để server biết script đang chạy
-local function sendHeartbeat()
+-- Gửi toàn bộ payload trong 1 request duy nhất
+local function sendBatch(payloads)
     if not req then return end
+    if #payloads == 0 then return end
     pcall(function()
         req({
-            Url = url:gsub('/post$', '/ping'),
+            Url    = url,
             Method = "POST",
             Headers = { ["Content-Type"] = "application/json" },
-            Body = game:GetService("HttpService"):JSONEncode({
-                JobId   = tostring(game.JobId),
-                PlaceId = game.PlaceId,
-                Players = tostring(#game:GetService('Players'):GetPlayers())
-                    .. "/" .. tostring(game:GetService('Players').MaxPlayers),
-                Note    = getgenv().ToolNote
-            })
+            Body   = game:GetService("HttpService"):JSONEncode(payloads)
         })
     end)
 end
 
 local postDataIntoServer = function()
-    local maxPlayers = game:GetService('Players').MaxPlayers
+    local maxPlayers   = game:GetService('Players').MaxPlayers
     local currentPlayers = #game:GetService('Players'):GetPlayers()
-    local playerStr = `{currentPlayers}/{maxPlayers}`
-    local clockTime = math.floor(game.Lighting.ClockTime)
-    local isNightVal = isNight(game.Lighting.ClockTime)
+    local playerStr    = `{currentPlayers}/{maxPlayers}`
+    local clockTime    = math.floor(game.Lighting.ClockTime)
+    local isNightVal   = isNight(game.Lighting.ClockTime)
+    local myNote       = getgenv().ToolNote
+    local jobId        = tostring(game.JobId)
+    local placeId      = game.PlaceId
 
-    local Elite = {'Diablo', 'Urban', 'Deandre'}
+    local Elite    = {'Diablo', 'Urban', 'Deandre'}
     local RareBoss = {'rip_indra True Form', 'Dough King', 'Cake Prince', 'Soul Reaper', 'Cursed Captain'}
-    local myNote = getgenv().ToolNote
+
+    local batch = {}
 
     -- 1. Check Elite
-    for i, v in ipairs(Elite) do
+    for _, v in ipairs(Elite) do
         if findMob(v) then
-            local payload = {
-                ["JobId"] = tostring(game.JobId),
-                ["PlaceId"] = game.PlaceId,
-                ["Players"] = playerStr,
-                ["ClockTime"] = clockTime,
-                ["IsNight"] = isNightVal,
-                ["Type"] = "Elite",
-                ["Elite"] = v,
-                ["Note"] = myNote
-            }
-            sendPayload(payload)
+            table.insert(batch, {
+                ["JobId"] = jobId, ["PlaceId"] = placeId,
+                ["Players"] = playerStr, ["ClockTime"] = clockTime,
+                ["IsNight"] = isNightVal, ["Type"] = "Elite",
+                ["Elite"] = v, ["Note"] = myNote
+            })
         end
     end
 
     -- 2. Check Rare Boss
-    for i, v in ipairs(RareBoss) do
+    for _, v in ipairs(RareBoss) do
         if findMob(v) then
-            local payload = {
-                ["JobId"] = tostring(game.JobId),
-                ["PlaceId"] = game.PlaceId,
-                ["Players"] = playerStr,
-                ["ClockTime"] = clockTime,
-                ["IsNight"] = isNightVal,
-                ["Type"] = "Rare Boss",
-                ["Rare Boss"] = v,
-                ["Note"] = myNote
-            }
-            sendPayload(payload)
+            table.insert(batch, {
+                ["JobId"] = jobId, ["PlaceId"] = placeId,
+                ["Players"] = playerStr, ["ClockTime"] = clockTime,
+                ["IsNight"] = isNightVal, ["Type"] = "Rare Boss",
+                ["Rare Boss"] = v, ["Note"] = myNote
+            })
         end
     end
 
     -- 3. Check Castle (Pirate Raid)
     if GetPirateRaidMob() and GetPirateRaidMob(true) then
-        local payload = {
-            ["JobId"] = tostring(game.JobId),
-            ["PlaceId"] = game.PlaceId,
-            ["Players"] = playerStr,
-            ["ClockTime"] = clockTime,
-            ["IsNight"] = isNightVal,
-            ["Type"] = "Castle",
+        table.insert(batch, {
+            ["JobId"] = jobId, ["PlaceId"] = placeId,
+            ["Players"] = playerStr, ["ClockTime"] = clockTime,
+            ["IsNight"] = isNightVal, ["Type"] = "Castle",
             ["Note"] = myNote
-        }
-        sendPayload(payload)
+        })
     end
 
     -- 4. Check Mirage
     if workspace.Map:FindFirstChild('MysticIsland') then
-        local payload = {
-            ["JobId"] = tostring(game.JobId),
-            ["PlaceId"] = game.PlaceId,
-            ["Players"] = playerStr,
-            ["ClockTime"] = clockTime,
-            ["IsNight"] = isNightVal,
-            ["Type"] = "Mirage",
-            ["Note"] = myNote,
-            ["timetonight"] = getSecondsToNightStart()
-        }
-        sendPayload(payload)
+        table.insert(batch, {
+            ["JobId"] = jobId, ["PlaceId"] = placeId,
+            ["Players"] = playerStr, ["ClockTime"] = clockTime,
+            ["IsNight"] = isNightVal, ["Type"] = "Mirage",
+            ["Note"] = myNote, ["timetonight"] = getSecondsToNightStart()
+        })
     end
 
     -- 5. Check Moon
-    local moonStatus = getMoon()
+    local moonStatus  = getMoon()
     local phaseStatus = getMoonPhase()
-    
     if moonStatus == "8/8" and phaseStatus == "Full Moon" then
-        local payload = {
-            ["JobId"] = tostring(game.JobId),
-            ["PlaceId"] = game.PlaceId,
-            ["Players"] = playerStr,
-            ["ClockTime"] = clockTime,
-            ["IsNight"] = isNightVal,
-            ["Type"] = "Moon",
-            ["MoonPhase"] = phaseStatus,
-            ["Note"] = myNote,
+        table.insert(batch, {
+            ["JobId"] = jobId, ["PlaceId"] = placeId,
+            ["Players"] = playerStr, ["ClockTime"] = clockTime,
+            ["IsNight"] = isNightVal, ["Type"] = "Moon",
+            ["MoonPhase"] = phaseStatus, ["Note"] = myNote,
             ["timetonight"] = getSecondsToNightStart()
-        }
-        sendPayload(payload)
+        })
     end
+
+    -- Gửi 1 request duy nhất chứa tất cả data
+    sendBatch(batch)
 end
 
 task.spawn(function()
     if not game:IsLoaded() then game.Loaded:Wait() end
     local plr = game.Players.LocalPlayer
     repeat task.wait(1) until plr.PlayerGui:FindFirstChild("Main (minimal)")
-    
+
     while true do
-        pcall(sendHeartbeat)
         pcall(postDataIntoServer)
         task.wait(1)
     end
