@@ -106,6 +106,25 @@ local function sendPayload(payload)
     -- output ẩn
 end
 
+-- Gửi heartbeat để server biết script đang chạy
+local function sendHeartbeat()
+    if not req then return end
+    pcall(function()
+        req({
+            Url = url:gsub('/post$', '/ping'),
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = game:GetService("HttpService"):JSONEncode({
+                JobId   = tostring(game.JobId),
+                PlaceId = game.PlaceId,
+                Players = tostring(#game:GetService('Players'):GetPlayers())
+                    .. "/" .. tostring(game:GetService('Players').MaxPlayers),
+                Note    = getgenv().ToolNote
+            })
+        })
+    end)
+end
+
 local postDataIntoServer = function()
     local maxPlayers = game:GetService('Players').MaxPlayers
     local currentPlayers = #game:GetService('Players'):GetPlayers()
@@ -206,6 +225,7 @@ task.spawn(function()
     repeat task.wait(1) until plr.PlayerGui:FindFirstChild("Main (minimal)")
     
     while true do
+        pcall(sendHeartbeat)
         pcall(postDataIntoServer)
         task.wait(1)
     end
