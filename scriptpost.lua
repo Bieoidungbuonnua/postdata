@@ -1,4 +1,4 @@
-getgenv().ToolNote = "gay"
+getgenv().ToolNote = "kaigod"
 
 -- Ẩn toàn bộ output
 local print = function() end
@@ -34,7 +34,9 @@ function GetPirateRaidMob(x)
 end
 
 function checkSea(v)
-    return v == tonumber(workspace:GetAttribute("MAP"):match("%d+"))
+    local map = workspace:GetAttribute("MAP")
+    if not map then return false end
+    return v == tonumber(tostring(map):match("%d+"))
 end
 
 local getMoon = newcclosure(function()
@@ -83,18 +85,26 @@ local function getSecondsToNightStart()
     return math.floor((delta / FULL_CYCLE_CLOCK) * FULL_DAY_REAL)
 end
 
--- Gửi toàn bộ payload trong 1 request duy nhất
+-- Gửi toàn bộ payload trong 1 request duy nhất, có retry 1 lần
+local HttpService = game:GetService("HttpService")
 local function sendBatch(payloads)
     if not req then return end
     if #payloads == 0 then return end
-    pcall(function()
-        req({
-            Url    = url,
-            Method = "POST",
+    local body = HttpService:JSONEncode(payloads)
+    local function doSend()
+        local ok, res = pcall(req, {
+            Url     = url,
+            Method  = "POST",
             Headers = { ["Content-Type"] = "application/json" },
-            Body   = game:GetService("HttpService"):JSONEncode(payloads)
+            Body    = body,
+            Timeout = 5
         })
-    end)
+        return ok and res and (res.StatusCode == 200 or res.StatusCode == 204)
+    end
+    if not doSend() then
+        task.wait(2)
+        pcall(doSend)
+    end
 end
 
 local postDataIntoServer = function()
@@ -137,7 +147,9 @@ local postDataIntoServer = function()
     end
 
     -- 3. Check Castle (Pirate Raid)
-    if GetPirateRaidMob() and GetPirateRaidMob(true) then
+    local raidRS  = GetPirateRaidMob()
+    local raidWS  = GetPirateRaidMob(true)
+    if raidRS and raidWS then
         table.insert(batch, {
             ["JobId"] = jobId, ["PlaceId"] = placeId,
             ["Players"] = playerStr, ["ClockTime"] = clockTime,
@@ -176,7 +188,12 @@ end
 task.spawn(function()
     if not game:IsLoaded() then game.Loaded:Wait() end
     local plr = game.Players.LocalPlayer
-    repeat task.wait(1) until plr.PlayerGui:FindFirstChild("Main (minimal)")
+    -- Chờ GUI tối đa 90 giây, tránh treo mãi mãi
+    local waited = 0
+    repeat
+        task.wait(1)
+        waited += 1
+    until plr.PlayerGui:FindFirstChild("Main (minimal)") or waited >= 90
 
     while true do
         pcall(postDataIntoServer)
